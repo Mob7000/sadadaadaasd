@@ -959,6 +959,68 @@ Players.PlayerAdded:Connect(function(player)
     end
 end)
 
+local function openGiftingUi()
+    if not State.IsRunning then return false end
+    
+    -- Ensure clean slate
+    closeGiftingUiSafe()
+    task.wait(3.0) -- DELAY: Wait for close animation (increased to 3s)
+    
+    -- Try using Remote first (Faster & More Reliable)
+    if ReplicatedStorage then
+        local remote = ReplicatedStorage:FindFirstChild("GiftingOpen", true) 
+                       or ReplicatedStorage:FindFirstChild("OpenGifting", true)
+        if remote and remote:IsA("RemoteEvent") then
+             Logger:Log("OpenGift", "Attempting to open via RemoteEvent: " .. remote.Name)
+             remote:FireServer()
+             
+             -- DELAY KHUSUS: Menunggu notifikasi hilang sesuai permintaan user
+             if StatusLabel then StatusLabel.Text = "Menunggu Notifikasi Hilang (3s)..." end
+             task.wait(3.0) 
+             
+             if waitForGiftUi(4) then return true end
+        end
+    end
+
+    -- Fallback: Click the physical "Gift" button
+    local pg = Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")
+    if pg then
+        local hud = pg:FindFirstChild("HUD") or pg:FindFirstChild("Main") or pg:FindFirstChild("ScreenGui")
+        if hud then
+            local btn = hud:FindFirstChild("Gift", true) or hud:FindFirstChild("Gifting", true) 
+                        or hud:FindFirstChild("GiftButton", true)
+            
+            if btn and btn:IsA("GuiButton") and isVisibleGuiObject(btn) then
+                 Logger:Log("OpenGift", "Clicking physical Gift button: " .. btn:GetFullName())
+                 task.wait(1.5) -- DELAY: Before click (Increased for stability)
+                 SuperClick(btn)
+                 
+                 -- DELAY KHUSUS: Menunggu notifikasi hilang
+                 if StatusLabel then StatusLabel.Text = "Menunggu Notifikasi Hilang (3s)..." end
+                 task.wait(3.0) 
+                 
+                 if waitForGiftUi(4) then return true end
+            else
+                 Logger:Log("OpenGift", "Gift button not found or not visible.")
+            end
+        end
+    end
+    
+    -- Last Resort: Try Controller
+    if GiftingController and GiftingController.Open then
+        Logger:Log("OpenGift", "Attempting to open via GiftingController")
+        pcall(function() GiftingController:Open() end)
+        
+        -- DELAY KHUSUS: Menunggu notifikasi hilang
+        if StatusLabel then StatusLabel.Text = "Menunggu Notifikasi Hilang (3s)..." end
+        task.wait(3.0) 
+        
+        if waitForGiftUi(4) then return true end
+    end
+
+    return false
+end
+
 -- [LOCKED] ProcessGifting: Logika asli dari file 'script'
 local function ProcessGifting()
     if not State.IsRunning then return end
@@ -1036,16 +1098,21 @@ local function ProcessGifting()
         StatusLabel.Text = "Cooldown " .. string.format("%.1f", remaining) .. "s"
         return
     end
-    local giftingGui = getGiftingGui()
-    if not giftingGui or giftingGui.Enabled ~= true then
-        if GiftingController then
-            pcall(function()
-                GiftingController:Open(State.CurrentItem)
-            end)
-            waitForGiftUi(1.5)
+    -- Menggunakan fungsi openGiftingUi yang sudah diperbarui (dengan delay 3 detik)
+    local uiOpened = false
+    for attempt = 1, 3 do
+        if openGiftingUi() then
+            uiOpened = true
+            break
         end
-    else
-        waitForGiftUi(1.0)
+        Logger:Log("ProcessGifting", "Gagal membuka Gift UI, mencoba ulang (" .. attempt .. "/3)...")
+        task.wait(1.0)
+    end
+
+    if not uiOpened then
+        StatusLabel.Text = "Gagal Membuka Gift UI!"
+        Logger:Log("ProcessGifting", "Gagal membuka Gift UI setelah 3x percobaan.")
+        return
     end
     
     if not State.IsRunning then return end -- CHECK STOP AFTER UI WAIT
