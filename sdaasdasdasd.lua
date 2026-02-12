@@ -331,12 +331,30 @@ local function HighlightObject(obj, color)
     end)
 end
 
+local function isBuyButtonTrulyReady(btn)
+    if not btn then return false end
+    if not isVisibleGuiObject(btn) then return false end
+    
+    -- Check for animation/fading (transparency)
+    if btn.BackgroundTransparency > 0.9 and btn.ImageTransparency > 0.9 then
+         return false
+    end
+    
+    -- Check for loading spinners
+    if btn:FindFirstChild("Loading", true) or btn:FindFirstChild("Spinner", true) then
+        return false
+    end
+    
+    return true
+end
+
 local function SuperClick(button)
     local absPos = button.AbsolutePosition
     local absSize = button.AbsoluteSize
-    local inset = GuiService:GetGuiInset()
-    local centerX = absPos.X + absSize.X/2 + inset.X
-    local centerY = absPos.Y + absSize.Y/2 + inset.Y
+    
+    -- FIX: Removed GuiInset to correct cursor offset
+    local centerX = absPos.X + absSize.X/2 
+    local centerY = absPos.Y + absSize.Y/2
     
     -- Visual Debug Dot (Green)
     pcall(function()
@@ -778,12 +796,15 @@ local function ClickConfirmButton()
              local t0 = tick()
              while State.IsRunning and not purchaseFinished and (tick() - t0) < 10 do
                  local btn = findBuyButton()
-                 if btn then
+                 -- FIX: Check if button is truly ready (animation finished)
+                 if btn and isBuyButtonTrulyReady(btn) then
                       local absPos = btn.AbsolutePosition
                       local absSize = btn.AbsoluteSize
-                      local inset = GuiService:GetGuiInset()
-                      State.SavedClickPosition = Vector2.new(absPos.X + absSize.X/2 + inset.X, absPos.Y + absSize.Y/2 + inset.Y)
+                      -- FIX: Removed GuiInset
+                      State.SavedClickPosition = Vector2.new(absPos.X + absSize.X/2, absPos.Y + absSize.Y/2)
                       SuperClick(btn)
+                 elseif btn then
+                      Logger:Log("ConfirmBuy", "Button found but not ready (Animation/Loading)...")
                  end
                  task.wait(0.1)
              end
@@ -966,11 +987,11 @@ local function ProcessGifting()
         -- Optimization: Pre-scan for Buy Button position
         if not State.SavedClickPosition then
              local btn = findBuyButton()
-             if btn then
+             if btn and isBuyButtonTrulyReady(btn) then
                  local absPos = btn.AbsolutePosition
                  local absSize = btn.AbsoluteSize
-                 local inset = GuiService:GetGuiInset()
-                 State.SavedClickPosition = Vector2.new(absPos.X + absSize.X/2 + inset.X, absPos.Y + absSize.Y/2 + inset.Y)
+                 -- FIX: Removed GuiInset
+                 State.SavedClickPosition = Vector2.new(absPos.X + absSize.X/2, absPos.Y + absSize.Y/2)
                  
                  local btnText = "Unknown"
                  if btn:IsA("TextButton") or btn:IsA("TextLabel") then btnText = btn.Text end
